@@ -1,0 +1,12 @@
+# 忽略大文件
+202409-citibike-tripdata.zip
+202409-citibike-tripdata/
+
+# 忽略 Jupyter Notebook 检查点
+.ipynb_checkpoints/
+
+# 忽略操作系统文件
+.DS_Store
+
+# 忽略其他不必要的文件
+__MACOSX/

@@ -3,6 +3,9 @@
 # Define the URL of the dataset
 URL="https://s3.amazonaws.com/tripdata/202409-citibike-tripdata.zip"
 
+# Create the data directory if it doesn't exist
+mkdir -p ./data
+
 # Use curl to download the dataset into the data directory
 curl -o ./data/202409-citibike-tripdata.zip $URL
 

@@ -11,3 +11,4 @@ data/*
 
 # Ignore other unnecessary files
 __MACOSX/
+./Notes.ipynb

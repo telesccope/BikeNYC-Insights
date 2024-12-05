@@ -158,8 +158,46 @@ ct_station_jan_df <- as.data.frame(ct_station_jan)
 agg_citibike_jan <- census_joined %>%
   inner_join(ct_station_jan_df, by= "BoroCT2020")
 
-# Replace NaN with 0 in all columns of the dataset
-agg_citibike_jan[is.na(agg_citibike_jan)] <- 0
+# colnames(agg_citibike_jan)
+# agg_citibike_jan <- agg_citibike_jan_copy
+
+# List of columns to convert from character to integer
+columns_to_convert <- c("Pop1", "PopU5", "Pop5t9", "Pop10t14", "Pop15t19", "Pop20t24", "Pop25t29", "Pop30t34", "Pop35t39", "PopU18", "Pop65pl", "GQClgHsg", "Fam", "HUnits")
+# Note: chr values with comma (e.g. "3,512") automatically converts to NA -- therefore need to remove the comma
+agg_citibike_jan[columns_to_convert] <- lapply(agg_citibike_jan[columns_to_convert], function(x) {
+  x <- gsub(",", "", x)             # Remove commas
+  x <- as.numeric(x)                # Convert to numeric
+  x[is.na(x)] <- 0                  # Replace NAs with 0
+  return(x)
+})
+
+# Replace NA with 0 for all numeric and integer columns
+agg_citibike_jan[sapply(agg_citibike_jan, is.numeric)] <- 
+  lapply(agg_citibike_jan[sapply(agg_citibike_jan, is.numeric)], function(x) {
+    x[is.na(x)] <- 0
+    return(x)
+  })
+
+# Verify if there are any remaining NAs
+sum(is.na(agg_citibike_jan))
+
+# Create a new column 'Pop19t64' as Pop1 - PopU18 - Pop65pl
+agg_citibike_jan$Pop19t64 <- agg_citibike_jan$Pop1 - agg_citibike_jan$PopU18 - agg_citibike_jan$Pop65pl
+
+# Verify the result
+head(agg_citibike_jan[, c("Pop1", "PopU18", "Pop65pl", "Pop19t64")])
+
+
+# # Verify if there are any remaining NAs and list the columns with NAs
+# remaining_na_cols <- sapply(agg_citibike_jan, function(x) any(is.na(x)))
+# 
+# # Print out the columns with remaining NAs
+# if (any(remaining_na_cols)) {
+#   cat("Columns with remaining NAs:\n")
+#   print(names(remaining_na_cols[remaining_na_cols == TRUE]))
+# } else {
+#   cat("No remaining NAs in the numeric columns.\n")
+# }
 
 # Plotting the map with context
 tm_shape(census_joined)+
@@ -242,8 +280,10 @@ moran.mc(agg_citibike_jan$total_ride_start_count, Wl, nsim=999)
 moran.plot(agg_citibike_jan$total_ride_start_count, Wl, xlab='Total Ride Start Count', ylab='Spatially Lagged Ride Start Count', labels=agg_citibike_jan$NTAName)
 
 # Gi and Gi*
-# Based 800m off the Manhattan block - also a general 20 min walk which roughly translates to a region
-NbrL <- dnearneigh(st_centroid(agg_citibike_jan), 0, 1200)
+# Based 4km roughly off the width Manhattan block - also see comparison of 4km vs 2km in commented block below
+
+NbrL <- dnearneigh(st_centroid(agg_citibike_jan), 0, 1.6)
+
 # Creating a list of neighbours not including self
 D <- nb2listw(NbrL, style='B')
 # Creating a list of neighbours, but include self
@@ -252,13 +292,48 @@ D_star <- nb2listw(include.self(NbrL), style='B')
 G <- globalG.test(agg_citibike_jan$total_ride_start_count, D)
 G <- globalG.test(agg_citibike_jan$total_ride_start_count, D_star)
 
+# Check if there are any isolated observations (no neighbors) by returning the length (number of neighbours) for each polygon
+sapply(NbrL, length)
+
+# > sapply(NbrL, length) when NbrL=4
+# [1] 163 166 155 170 167 174 124 166 116 170 153 154 111 105 167 161 139 143 133 154 146 136 144 151 137 133
+# [27] 120 174 131 167 122 151 123 170 166 137 161 126 154 142 127 142 169 130 163 145 159 131 115 167 145 161
+# [53] 156 170 144 154 163 165 148 166 167 149 163 136 130 160 150 165 133 161 148 133 132 147 119 128 154 150
+# [79] 147 142 139 132 131 122 127 130 125 129 115 115 109 123 107 112 118 104 110  89  91  94  88  79  78  66
+# [105]  68  70  66  57  57  87  80  71  62  15  15  15  15  15  15 155 107 116 118 111 106 101  95  90  85  84
+# [131]  91  93  96 105 106 129  89  83  79  74  65  56  64  67  59  80  98  98  15 159 122 163 169 164  98  90
+# [157] 164 158 151 171  78  15  15  15 113  15  76 162 174  96 148 133 130 177 169  67 174 168 114 161 156 153
+# [183]  78  84 115 110 161 143 147 157 168 166 126 132 166 166 164 164 162 160 152 163 167 160  95  94 107  99
+# [209]  69  76  77  15 168 155 159 110 136 113 134 137 161 135 114 143 119 130 119 115 151 138 140 146 127 162
+# [235] 163 163 153 140 150 137 140 139 125 107  66  93 106 128 118 125  77 103  88 128 128 129 117 105  98  92
+# [261]  88  84  87  96 100 104 111 124 121 139 149 158 170 166 149 145 131 129 120 117 112 174  97 104  97 105
+# [287] 121 127 134 132 124 115 111 118 124 130 117 112 111 112 111 107  98  79  83  89  93  97  96 104  87  68
+# [313] 115  86  91  98  95  96 105 112 119 112 119 127 125 139 138 142 159 160 142 144 173 173 157 155 158 114
+# [339] 147  99 141 144 109  96 122 113 178 177  94  95  84 130  97 162 116 115 178  83 177 172  81 125 149 172
+# [365] 164 142 166 160 125 138 133  86 173  58  69 115 130 134 138  84 112 124 123  15  15 128 120 116 107  83
+# [391] 173 176  15  15  96 175  86  73 168 166 118 120 105 111  86  83 143 151  92  40 155 146 172 174 144 153
+
+# > sapply(NbrL, length) when NbrL=2
+# [1] 46 49 51 50 51 51 41 51 39 53 55 57 44 33 56 61 53 58 52 63 60 60 62 61 60 56 49 48 55 56 45 61 45 52 57
+# [36] 54 60 42 60 57 46 59 55 47 57 59 58 45 34 51 58 53 56 47 57 56 52 49 59 50 45 57 49 55 46 52 57 45 51 53
+# [71] 58 50 46 46 34 40 38 38 42 42 39 40 38 38 40 38 43 37 39 25 42 35 47 24 38 34 39 39 47 28 38 32 27 23 28
+# [106] 29 29 23 25 46 41 34 29  8 10 11 13 15 14 30 31 32 39 39 36 33 28 31 33 29 29 34 35 40 38 41 25 21 19 21
+# [141] 21 17 27 28 22 28 21 20  7 58 29 60 51 59 28 36 47 42 50 46 27 12 10 12 26 11 33 36 32 40 55 46 45 46 53
+# [176] 24 46 32 34 42 41 41 34 41 27 23 51 61 60 62 45 49 53 53 43 47 41 43 44 44 42 49 50 53 37 31 26 29 33 34
+# [211] 39 14 54 62 62 39 43 27 22 34 28 24 37 32 27 51 30 27 41 39 41 45 42 50 50 54 56 58 54 59 59 51 44 34 12
+# [246] 37 42 52 53 62 24 51 36 61 61 58 54 50 43 36 31 18 26 33 40 47 53 57 59 59 57 53 51 50 57 55 55 53 54 50
+# [281] 46 52 29 35 31 40 50 51 53 50 49 45 42 44 45 47 39 41 38 38 38 38 34 23 25 28 29 32 34 35 31 17 43 18 23
+# [316] 29 32 34 33 30 34 38 40 45 38 34 34 33 39 42 38 42 42 41 40 37 29 27 28 27 49 47 53 43 34 29 47 51 35 29
+# [351] 22 42 23 45 37 38 43 30 44 46 15 26 47 50 32 22 47 50 35 46 45 21 48 22 17 34 46 48 45 24 31 32 32 15 14
+# [386] 49 51 35 36 25 51 48 14 14 15 44 28 25 37 42 46 42 21 30 29 29 33 31 22  5 61 65 44 46 45 45
+
 Gi <- localG(agg_citibike_jan$total_ride_start_count, D)
 agg_citibike_jan$Gi <- Gi
 Gi_star <- localG(agg_citibike_jan$total_ride_start_count, D_star)
 agg_citibike_jan$Gi_star <- Gi_star
 
+tm_shape(agg_citibike_jan) + tm_polygons(col='Gi', palette='-RdBu', style='quantile')
 tm_shape(agg_citibike_jan) + tm_polygons(col='Gi_star', palette='-RdBu', style='quantile')
-
 
 # Local Moran's I
 Ii <- localmoran(agg_citibike_jan$total_ride_start_count, Wl)
@@ -306,8 +381,7 @@ tm_shape(agg_citibike_jan) + tm_polygons(col='Ii_cluster')
 
 
 # Testing for spatial autocorrelation in regression errors
-# Can run against area of census tract
-janbike.lm <- lm(total_ride_start_count ~ Pop1 + PopU18 + Pop65pl + GQClgHsg + Fam + HUnits + AvgHHSz + num_stations + total_ride_end_count, data=agg_citibike_jan)
+janbike.lm <- lm(total_ride_start_count ~ PopU18 + Pop19t64 + Pop65pl + HUnits + Fam + AvgHHSz + GQClgHsg + Shape_Area + num_stations, data=agg_citibike_jan)
 agg_citibike_jan$lm.res <- residuals(janbike.lm)
 tm_shape(agg_citibike_jan)+tm_polygons('lm.res', palette='-RdBu', style='quantile')
 

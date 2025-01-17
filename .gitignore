@@ -11,3 +11,4 @@ data/*
 
 # Ignore other unnecessary files
 __MACOSX/
+weekly_profile_tfidf.csv
